@@ -37,7 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    "api.apps.ApiConfig"
+    "api.apps.ApiConfig",
+
 ]
 
 MIDDLEWARE = [
@@ -49,6 +50,10 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+
+AUTH_USER_MODEL = 'api.User'  # custom user model for this project
+
 
 ROOT_URLCONF = 'PLD_API.urls'
 
