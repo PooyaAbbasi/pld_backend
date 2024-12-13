@@ -30,7 +30,8 @@ class User(AbstractUser):
 
     profile_image = models.ImageField(
         upload_to='profile_pics/',
-        verbose_name='Profile Image', null=True,
+        verbose_name='Profile Image',
+        null=True,
         help_text='image for profile of user'
     )
 
