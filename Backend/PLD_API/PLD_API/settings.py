@@ -149,7 +149,6 @@ REST_FRAMEWORK = {
     'DEFAULT_PERMISSION_CLASSES': [
         'rest_framework.permissions.IsAuthenticated',
     ],
-    'PAGE_SIZE': 10,
 
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework_simplejwt.authentication.JWTAuthentication',
@@ -163,19 +162,25 @@ DJOSER = {
     'SERIALIZERS': {
         'user_create': 'api.serializers.UserCreateSerializer',
         'user': 'api.serializers.UserSerializer',
-
+        'current_user': 'api.serializers.CurrentUserSerializer',
+        'set_password': 'api.serializers.SetPasswordSerializer',
     },
     'PERMISSIONS': {
         'user_create': ['rest_framework.permissions.IsAdminUser',],
         'user_delete': ['rest_framework.permissions.IsAuthenticated',],
-    }
+        'set_password': ['rest_framework.permissions.IsAdminUser',],
+    },
+    'DISABLE_ENDPOINTS': [
+        'reset_username', 'reset_password',
+    ]
+
 }
 
 
 SIMPLE_JWT = {
     'UPDATE_LAST_LOGIN': True,
 
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=60),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
     'REFRESH_TOKEN_LIFETIME': timedelta(hours=8),
 
     "AUTH_HEADER_TYPES": ("JWT",),

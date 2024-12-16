@@ -44,6 +44,23 @@ class User(AbstractUser):
         verbose_name = "User"
         verbose_name_plural = "Users"
 
+    @property
+    def is_manager(self) -> bool:
+        """
+            provided for api app
+            :returns: true if user is superuser or staff.
+        """
+        return self.is_superuser or self.is_staff
+
+    @is_manager.setter
+    def is_manager(self, value: bool):
+        """ only sets the is_staff attribute.
+            HINT: to change is_superuser column go to the admin site.
+        """
+        print(f'in is_manager setter value{value}')
+        self.is_staff = value
+        # self.save(update_fields=['is_staff'])
+
 
 class Automobile(models.Model):
     plate = models.CharField(max_length=20, primary_key=True)

@@ -4,13 +4,14 @@ from django.shortcuts import get_object_or_404
 from rest_framework import viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
-
-from djoser.views import UserViewSet as DjoserUserViewSet
 from rest_framework.response import Response
+from rest_framework.decorators import api_view
 from rest_framework.status import (
     HTTP_204_NO_CONTENT,
     HTTP_404_NOT_FOUND
 )
+
+from djoser.views import UserViewSet as DjoserUserViewSet
 
 from .serializers import *
 from .models import *
@@ -18,6 +19,7 @@ from .models import *
 
 class UserViewSet(DjoserUserViewSet):
 
+    urls_to_exclude = ['set_username', 'reset_username']
 
     def get_permissions(self):
 
@@ -51,3 +53,34 @@ class UserViewSet(DjoserUserViewSet):
         user = get_object_or_404(User, id=id)
         user.delete()
         return Response(status=HTTP_204_NO_CONTENT)
+
+    @action(detail=True, methods=['post'], )
+    def set_password(self, request, id, *args, **kwargs):
+        """
+            set_password endpoint change the password of user with id with new_password in request data
+            (only accessible for manager user)
+        :return: 204 if successful, 404 if user does not exist,
+        """
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        user_to_update = get_object_or_404(User, id=id)
+        user_to_update.set_password(serializer.validated_data['new_password'])
+        user_to_update.save()
+
+        return Response(status=HTTP_204_NO_CONTENT)
+
+    # -------------- disable unwanted actions of djoser UserViewSet.
+
+    set_username = None
+    reset_username = None
+    reset_username_confirm = None
+    reset_password = None
+    reset_password_confirm = None
+
+
+@api_view(['GET', 'post'])
+def not_found_view(request):
+    return Response(data={'Not Found': 'endpoint not found'}, status=HTTP_404_NOT_FOUND)
+

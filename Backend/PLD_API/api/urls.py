@@ -6,8 +6,9 @@ from .views import *
 router = DefaultRouter()
 router.register('auth/users', UserViewSet)
 
+app_name = 'api'
+
 urlpatterns = [
-    # path('auth/jwt/create/', CustomTokenObtainPairView.as_view()),
-    # path('auth', include('djoser.urls')),
+
     path('auth/', include('djoser.urls.jwt')),
 ] + router.urls
