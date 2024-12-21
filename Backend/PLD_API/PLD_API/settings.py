@@ -43,6 +43,7 @@ INSTALLED_APPS = [
     "djoser",
     "debug_toolbar",
     "api.apps.ApiConfig",
+    'corsheaders',
 
 ]
 
@@ -53,6 +54,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'debug_toolbar.middleware.DebugToolbarMiddleware'
 ]
@@ -188,3 +190,9 @@ SIMPLE_JWT = {
     "TOKEN_OBTAIN_SERIALIZER": "api.serializers.TokenObtainPairSerializer",
 }
 
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_HEADERS = (
+    'Content-Type',
+    'Authorization',
+    "x-requested-with",
+)
