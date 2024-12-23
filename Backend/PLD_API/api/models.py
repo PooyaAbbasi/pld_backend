@@ -1,5 +1,8 @@
+from re import compile
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
+from django.db.models import QuerySet, Value, Q, F, When, Case
+from django.utils import timezone
 
 
 class UserManager(BaseUserManager):
@@ -66,17 +69,102 @@ class Automobile(models.Model):
     plate = models.CharField(max_length=20, primary_key=True)
 
     # most of these fields are nullable for anonymous Automobiles.
-    color = models.CharField(max_length=64, null=True)
-    name_and_model = models.CharField(max_length=128, null=True)
-    owner_first_name = models.CharField(max_length=128, null=True)
-    owner_last_name = models.CharField(max_length=128, null=True)
-    owner_username = models.CharField(max_length=128, null=True)
+    color = models.CharField(max_length=64, null=True, blank=True)
+    name_and_model = models.CharField(max_length=128, null=True, blank=True)
+    owner_first_name = models.CharField(max_length=128, null=True, blank=True)
+    owner_last_name = models.CharField(max_length=128, null=True, blank=True)
+    owner_username = models.CharField(max_length=128, null=True, blank=True)
     # owner_username could be any unique code or name for identification.
 
     is_allways_permitted = models.BooleanField(default=False)
 
+    PLATE_PATTERN = r"\d{2}-[آ-ی]-\d{3}-\d{2}"
+    FULL_MATCH_PLATE_PATTERN = r'^' + PLATE_PATTERN + r'$'
+
     class Meta:
         unique_together = (('plate', 'owner_username'),)
+
+    def is_permitted(self) -> bool:
+        """
+        :return: true if automobile.is_allways_permitted
+                or has a valid related TemporaryPermission for now.
+
+        HINT: Doesn't efficient for database query it's just for development,
+            Use .filter with is_permitted_conditions() static method to get this attribute.
+        TODO Should be removed for production.
+        """
+
+        # last temporary permission of this automobile
+        temp_permission: TemporaryPermission = self.get_last_temp_permission()
+        if self.is_allways_permitted:
+            return True
+        elif temp_permission is not None:
+            return temp_permission.from_time <= timezone.now() <= temp_permission.to_time
+
+        # No permission found
+        return False
+
+    def get_last_temp_permission(self) -> 'TemporaryPermission':
+        """
+        :returns: first temporary permission object related to this automobile which are ordered by to_time descending.
+        HINT: Doesn't efficient for database query it's just for development,
+        TODO Should be removed for production.
+        """
+        return self.permissions.order_by('-to_time').first()
+
+        # I don't know wich one is more efficient. (- _ -)
+        # >>> max_to_time = self.permissions.aggrigate(max_to_time=models.Max('to_time'))['max_to_time']
+        # >>> return self.permissions.first(to_time=max_to_time).first()
+
+    def is_anonymous(self) -> bool:
+        """
+        :return: true if automobile is not permitted or not have saved owner info or name_and_model
+        """
+
+        anonymous_conditions: tuple[bool, bool, bool] = (
+            not self.is_permitted,
+            (self.owner_username is None) and (self.owner_first_name is None and self.owner_last_name is None),
+            self.name_and_model is None
+        )
+
+        return all(anonymous_conditions)
+
+    @staticmethod
+    def is_permitted_conditions() -> Q:
+        return Q(is_allways_permitted=True) | Q(permissions__to_time__gt=timezone.now())
+
+    @staticmethod
+    def is_anonymous_conditions() -> Q:
+        return (~Automobile.is_permitted_conditions() &
+                (Q(owner_username__isnull=True) & Q(owner_first_name__isnull=True) & Q(owner_last_name__isnull=True)) &
+                (Q(color__isnull=True) & Q(name_and_model__isnull=True)))
+
+    @staticmethod
+    def get_annotated_is_permitted(query_set: QuerySet['Automobile']) -> QuerySet['Automobile']:
+        """
+        :param query_set: given query set to be annotated.
+        :return: annotated query set with is_permitted to true if automobile has is_permitted_conditions.
+        """
+        return query_set.annotate(
+            is_permitted=Case(
+                When(Automobile.is_permitted_conditions(), then=Value(True)),
+                default=Value(False),
+                output_field=models.BooleanField()
+            )
+        )
+
+    def __repr__(self):
+        return (f'Automobile({self.plate= }, '
+                f' {self.name_and_model= }, '
+                f' {self.color= }, '
+                f' {self.owner_username= }, {self.owner_first_name= }, {self.owner_last_name= }, '
+                f' {self.is_allways_permitted= }, '
+                f' {self.is_permitted()= }'
+                f'{self.is_anonymous()= }'
+                f')')
+
+    def __str__(self):
+        return self.__repr__()
 
 
 class TemporaryPermission(models.Model):
@@ -122,8 +210,8 @@ def auto_traffic_image(instance, filename):
 
 
 class Traffic(models.Model):
-    automobile = models.ForeignKey(to=Automobile, on_delete=models.CASCADE, )
-    gate = models.ForeignKey(to=Gate, on_delete=models.CASCADE,)
+    automobile = models.ForeignKey(to=Automobile, on_delete=models.RESTRICT,)
+    gate = models.ForeignKey(to=Gate, on_delete=models.RESTRICT,)
     image = models.ImageField(upload_to=auto_traffic_image, )
     time = models.DateTimeField()
     security_agent = models.ForeignKey(to=User, on_delete=models.RESTRICT, related_name='traffics')

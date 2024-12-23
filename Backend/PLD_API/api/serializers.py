@@ -12,7 +12,7 @@ from rest_framework_simplejwt.serializers import (
     TokenObtainPairSerializer as BaseTokenObtainPairSerializer
 )
 
-from .models import User
+from .models import *
 
 
 def phone_number_validator(phone_number: str) -> str:
@@ -85,3 +85,27 @@ class CurrentUserSerializer(UserSerializer):
 class SetPasswordSerializer(serializers.Serializer):
 
     new_password = serializers.CharField(write_only=True, required=True)
+
+
+class AutomobileSerializer(serializers.ModelSerializer):
+
+    is_permitted = serializers.BooleanField(read_only=True)
+
+    class Meta:
+        model = Automobile
+        fields = ['plate', 'name_and_model', 'color', 'owner_username',
+                  'owner_first_name', 'owner_last_name', 'is_permitted', 'is_allways_permitted']
+        required_fields = ('plate',)
+        extra_kwargs = {
+            'owner_username': {'default': None, 'required': False},
+            'is_allways_permitted': {'write_only': True, 'required': False, 'default': False},
+        }
+        unique_together = ('plate', 'owner_username')
+
+    def plate_validator(self, plate: str) -> str:
+        pattern = re.compile(self.Meta.model.FULL_MATCH_PLATE_PATTERN)
+        clean_plate = plate.strip()
+        if not pattern.match(clean_plate):
+            raise ValidationError("Invalid plate format")
+
+        return clean_plate
