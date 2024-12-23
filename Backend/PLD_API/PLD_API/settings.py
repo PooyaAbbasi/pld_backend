@@ -169,9 +169,9 @@ DJOSER = {
         'set_password': 'api.serializers.SetPasswordSerializer',
     },
     'PERMISSIONS': {
-        'user_create': ['rest_framework.permissions.IsAdminUser',],
-        'user_delete': ['rest_framework.permissions.IsAuthenticated',],
-        'set_password': ['rest_framework.permissions.IsAdminUser',],
+        'user_create': ['api.permissions.IsManagerUser',],
+        'user_delete': ['api.permissions.IsManagerUser',],
+        'set_password': ['api.permissions.IsManagerUser',],
     },
     'DISABLE_ENDPOINTS': [
         'reset_username', 'reset_password',

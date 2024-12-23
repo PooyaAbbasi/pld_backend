@@ -62,7 +62,7 @@ class User(AbstractUser):
         """
         print(f'in is_manager setter value{value}')
         self.is_staff = value
-        # self.save(update_fields=['is_staff'])
+
 
 
 class Automobile(models.Model):

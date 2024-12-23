@@ -4,7 +4,7 @@ from django.db.models import Prefetch
 
 from rest_framework import viewsets
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, IsAdminUser, SAFE_METHODS
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.status import (
@@ -18,6 +18,7 @@ from djoser.views import UserViewSet as DjoserUserViewSet
 
 from .serializers import *
 from .models import *
+from .permissions import IsManagerUser
 
 
 class UserViewSet(DjoserUserViewSet):
@@ -28,9 +29,8 @@ class UserViewSet(DjoserUserViewSet):
 
         if self.action == 'me' and self.request.method in SAFE_METHODS:
             return [IsAuthenticated()]
-        elif self.action in ['retrieve', 'create', 'update', 'partial_update', 'list',]:
-            # the 'destroy' action is handled in its action-view.
-            return [IsAdminUser()]
+        elif self.action in ['retrieve', 'create', 'update', 'partial_update', 'list', 'destroy']:
+            return [IsManagerUser()]
         else:
             return super().get_permissions()
 
@@ -89,7 +89,7 @@ def not_found_view(request):
 
 
 class AutomobileViewSet(viewsets.ModelViewSet):
-    serializer_class = AutomobileSerializer
+
     pagination_class = PageNumberPagination
 
     lookup_field = 'plate'
@@ -100,7 +100,7 @@ class AutomobileViewSet(viewsets.ModelViewSet):
             # ordinary users only have permission to read detail of automobile
             return [IsAuthenticated()]
         else:
-            return [IsAdminUser()]
+            return [IsManagerUser()]
 
     @action(detail=False, methods=['get'], url_path='all', url_name='list-all')
     def list_all(self, request, *args, **kwargs):
@@ -146,7 +146,8 @@ class AutomobileViewSet(viewsets.ModelViewSet):
         """
         :param response: response that was made.
         :return: if status of response is 200_ok, with refreshed data of instance
-            to ensure that data contains all changes confirmed in database else return response without change.
+            to ensure that data contains all changes confirmed in database
+            else return response without change.
         """
         if response.status_code == HTTP_200_OK:
             # Re-Fetch instance data from database.
@@ -154,6 +155,15 @@ class AutomobileViewSet(viewsets.ModelViewSet):
             response.data = self.get_serializer(refreshed_instance).data
 
         return response
+
+    def get_serializer_class(self, *args, **kwargs):
+        if self.action in ['partial_update', 'update']:
+            return AutomobileUpdateSerializer
+
+        else:
+            return AutomobileSerializer
+
+
 
 
 
