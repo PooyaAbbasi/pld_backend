@@ -119,7 +119,7 @@ AUTH_PASSWORD_VALIDATORS = [
 
 LANGUAGE_CODE = 'en-us'
 
-TIME_ZONE = 'UTC'
+TIME_ZONE = 'Asia/Tehran'
 
 USE_I18N = True
 
@@ -197,3 +197,7 @@ CORS_ALLOW_HEADERS = (
     'Authorization',
     "x-requested-with",
 )
+
+
+DATETIME_FORMAT = '%Y/%m/%d-%H:%M:%S'
+DATETIME_INPUT_FORMATS = ['%Y/%m/%d-%H:%M:%S', ]

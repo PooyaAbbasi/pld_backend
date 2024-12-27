@@ -3,15 +3,17 @@ from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch
 
 from rest_framework import viewsets
+from rest_framework.mixins import (
+    CreateModelMixin,
+    UpdateModelMixin,
+    ListModelMixin,
+    DestroyModelMixin,
+)
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
 from rest_framework.decorators import api_view
-from rest_framework.status import (
-    HTTP_204_NO_CONTENT,
-    HTTP_404_NOT_FOUND,
-    HTTP_200_OK
-)
+from rest_framework.status import *
 from rest_framework.pagination import PageNumberPagination
 
 from djoser.views import UserViewSet as DjoserUserViewSet
@@ -94,14 +96,6 @@ class AutomobileViewSet(viewsets.ModelViewSet):
 
     lookup_field = 'plate'
 
-    def get_permissions(self):
-
-        if self.action == 'retrieve':
-            # ordinary users only have permission to read detail of automobile
-            return [IsAuthenticated()]
-        else:
-            return [IsManagerUser()]
-
     @action(detail=False, methods=['get'], url_path='all', url_name='list-all')
     def list_all(self, request, *args, **kwargs):
         """
@@ -121,26 +115,48 @@ class AutomobileViewSet(viewsets.ModelViewSet):
 
         return self.__response_with_refreshed_data_if_ok(response)
 
-    def partial_update(self, request, *args, **kwargs):
-        response = super().partial_update(request, *args, **kwargs)
+    @action(detail=True, methods=['get'], )
+    def permissions(self, request, plate, *args, **kwargs):
+        related_permissions = TemporaryPermission.objects.filter(automobile_id=plate).all()
+        filtered_queryset = self.filter_queryset(related_permissions)
 
-        return self.__response_with_refreshed_data_if_ok(response)
+        page = self.paginate_queryset(filtered_queryset)
+        if page is not None:
+            serializer = TemporaryPermissionSerializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+
+        serializer = TemporaryPermissionSerializer(related_permissions, many=True)
+        return Response(serializer.data, status=HTTP_200_OK)
 
     def get_queryset(self):
 
         # annotate the query set with is_permitted_conditions of Automobile model, as `is_permitted`.
         query_set = Automobile.get_annotated_is_permitted(Automobile.objects.all())
+
+        for auto in query_set:
+            print(repr(auto))
+
         match self.action:
             case 'list_all':
                 return query_set
 
             case 'list':
                 # returns all registered automobiles which doesn't satisfy anonymous conditions
-                registered_automobiles = (query_set.filter(~Automobile.is_anonymous_conditions()))
+                registered_automobiles = (query_set.filter(~Automobile.is_anonymous_conditions()).distinct())
                 return registered_automobiles
 
+            case 'retrieve':
+                return Automobile.objects.all()
             case _:  # other actions
                 return query_set
+
+    def get_permissions(self):
+
+        if self.action in ('retrieve', 'permissions'):
+            # ordinary users only have permission to read detail of automobile
+            return [IsAuthenticated()]
+        else:
+            return [IsManagerUser()]
 
     def __response_with_refreshed_data_if_ok(self, response: Response):
         """
@@ -159,11 +175,40 @@ class AutomobileViewSet(viewsets.ModelViewSet):
     def get_serializer_class(self, *args, **kwargs):
         if self.action in ['partial_update', 'update']:
             return AutomobileUpdateSerializer
-
+        elif self.action == 'retrieve':
+            return AutomobileDetailSerializer
         else:
             return AutomobileSerializer
 
 
+class TemporaryPermissionViewSet(
+    CreateModelMixin,
+    ListModelMixin,
+    DestroyModelMixin,
+    viewsets.GenericViewSet
+):
 
+    queryset = TemporaryPermission.objects.all().select_related('automobile')
+    serializer_class = TemporaryPermissionSerializer
 
+    pagination_class = PageNumberPagination
 
+    def partial_update(self, request, *args, **kwargs):
+
+        instance: TemporaryPermission = self.get_object()
+        data = request.data
+        serializer = ModifyTempPermissionSerializer(
+            instance,
+            data=data,
+            partial=True,
+            context=self.get_serializer_context()
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(data=serializer.data, status=HTTP_200_OK)
+
+    def get_permissions(self):
+        if self.action in ('create', 'retrieve'):
+            return [IsAuthenticated()]
+        else:
+            return [IsManagerUser()]

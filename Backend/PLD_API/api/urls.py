@@ -6,6 +6,7 @@ from .models import Automobile
 
 router = DefaultRouter()
 router.register('auth/users', UserViewSet)
+router.register('temp_permissions', TemporaryPermissionViewSet, basename='temp_permissions')
 
 app_name = 'api'
 
@@ -26,14 +27,22 @@ urlpatterns = [
          ),
          name='automobiles-list-all'),
 
-    re_path(rf'^automobiles/(?P<plate>{Automobile.PLATE_PATTERN})/$', AutomobileViewSet.as_view(
-        {
-            'get': 'retrieve',
-            'put': 'update',
-            'delete': 'destroy',
-            'patch': 'partial_update',
-        }
-    ))
+    re_path(rf'^automobiles/(?P<plate>{Automobile.PLATE_PATTERN})/$',
+        AutomobileViewSet.as_view(
+            {
+                'get': 'retrieve',
+                'put': 'update',
+                'delete': 'destroy',
+                'patch': 'partial_update',
+            }
+        )
+    ),
+
+    re_path(rf'^automobiles/(?P<plate>{Automobile.PLATE_PATTERN})/permissions/$',
+            AutomobileViewSet.as_view(
+                {'get': 'permissions'},
+            ),
+            name='automobiles-permissions-list'),
 
 
 ] + router.urls

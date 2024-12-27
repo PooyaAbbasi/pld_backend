@@ -1,6 +1,10 @@
 import re
 from typing import Dict, Any
 
+from django.utils import timezone
+from django.conf import settings
+import jdatetime
+
 from djoser.serializers import (
     UserCreateSerializer as BaseUserCreateSerializer,
     UserSerializer as BaseUserSerializer,
@@ -109,3 +113,107 @@ class AutomobileSerializer(serializers.ModelSerializer):
             raise ValidationError("Invalid plate format")
 
         return clean_plate
+
+
+class AutomobileUpdateSerializer(AutomobileSerializer):
+    class Meta(AutomobileSerializer.Meta):
+        fields = AutomobileSerializer.Meta.fields
+        read_only_fields = ['plate',]
+
+
+class AutomobileDetailSerializer(AutomobileSerializer):
+
+    active_permission = serializers.SerializerMethodField()
+
+    class Meta(AutomobileSerializer.Meta):
+        fields = ['plate', 'color', 'name_and_model',
+                  'owner_username', 'owner_first_name', 'owner_last_name',
+                  'active_permission', 'is_allways_permitted'
+                  ]
+        read_only_fields = ['plate', 'color', 'name_and_model',
+                            'owner_username', 'owner_first_name', 'owner_last_name',
+                            'active_permission', 'is_allways_permitted']
+
+        extra_kwargs = {
+            'is_allways_permitted': {'write_only': False},
+        }
+
+    def get_active_permission(self, obj: Automobile) -> Dict | None:
+        active_permission = obj.get_active_permission()
+        if active_permission:
+            return TemporaryPermissionSerializer(active_permission).data
+        return None
+
+
+class JalaliDateTimeField(serializers.DateTimeField):
+
+    def to_representation(self, value):
+        aware_local_datetime = timezone.make_aware(value) if timezone.is_naive(value) else value
+
+        local_datetime = aware_local_datetime.astimezone(timezone.get_current_timezone())
+        jalali_local_datetime = jdatetime.datetime.fromgregorian(datetime=local_datetime)
+        return jalali_local_datetime.strftime(settings.DATETIME_FORMAT)
+
+    def to_internal_value(self, data):
+        if not data:
+            return None
+        try:
+            jalali_datetime = jdatetime.datetime.strptime(data, settings.DATETIME_FORMAT)
+        except ValueError:
+            raise ValidationError("'فرمت زمان ورودی باید به صورت YYYY/MM/DD-HH:MM:SS باشد.'")
+
+        jalali_aware_datetime = timezone.make_aware(jalali_datetime)
+        gregorian_tehran_datetime = jalali_aware_datetime.togregorian()
+        utc_datetime = timezone.localtime(gregorian_tehran_datetime, timezone=timezone.timezone.utc)
+        return utc_datetime
+
+
+class TemporaryPermissionSerializer(serializers.ModelSerializer):
+
+    automobile = serializers.PrimaryKeyRelatedField(queryset=Automobile.objects.all())
+    from_time = JalaliDateTimeField()
+    to_time = JalaliDateTimeField()
+
+    class Meta:
+        model = TemporaryPermission
+        fields = '__all__'
+
+    def validate(self, attrs):
+        data = super().validate(attrs)
+
+        from_time = data.get('from_time')
+        to_time = data.get('to_time')
+        automobile = data.get('automobile')
+        pk = None
+
+        # set instance data if they are not exists in patch data.
+        if self.context.get('request').method == 'PATCH':
+            from_time = from_time if (from_time is not None) else self.instance.from_time
+            to_time = to_time if (to_time is not None) else self.instance.to_time
+            automobile = automobile if (automobile is not None) else self.instance.automobile
+            pk = self.instance.pk
+
+        # check if from_time is before that to_time.
+        if from_time >= to_time:
+            raise ValidationError('زمان شروع مجوز باید قبل از زمان پایان آن باشد!')
+
+        if to_time <= timezone.now():
+            raise ValidationError('زمان پایان مجوز باید برای آینده باشد!')
+
+        new_permission = TemporaryPermission(pk=pk, from_time=from_time, to_time=to_time, automobile=automobile)
+
+        # Check for conflicts with current or other permissions in the future.
+        if TemporaryPermission.objects.filter(
+                TemporaryPermission.conflict_with_current_or_future_permissions_conditions(new_permission)
+        ).exists():
+            raise ValidationError('زمان مجوز داده شده با زمان مجوز های کنونی یا مجوز های آینده تداخل دارد!')
+
+        return data
+
+
+class ModifyTempPermissionSerializer(TemporaryPermissionSerializer):
+
+    class Meta(TemporaryPermissionSerializer.Meta):
+        model = TemporaryPermissionSerializer.Meta.model
+        fields = TemporaryPermissionSerializer.Meta.fields
+        read_only_fields = ['automobile', 'id']

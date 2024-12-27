@@ -1,7 +1,7 @@
 from re import compile
 from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
-from django.db.models import QuerySet, Value, Q, F, When, Case
+from django.db.models import QuerySet, Value, Q, F, When, Case, Max, OuterRef
 from django.utils import timezone
 
 
@@ -60,9 +60,7 @@ class User(AbstractUser):
         """ only sets the is_staff attribute.
             HINT: to change is_superuser column go to the admin site.
         """
-        print(f'in is_manager setter value{value}')
         self.is_staff = value
-
 
 
 class Automobile(models.Model):
@@ -84,54 +82,17 @@ class Automobile(models.Model):
     class Meta:
         unique_together = (('plate', 'owner_username'),)
 
-    def is_permitted(self) -> bool:
-        """
-        :return: true if automobile.is_allways_permitted
-                or has a valid related TemporaryPermission for now.
-
-        HINT: Doesn't efficient for database query it's just for development,
-            Use .filter with is_permitted_conditions() static method to get this attribute.
-        TODO Should be removed for production.
-        """
-
-        # last temporary permission of this automobile
-        temp_permission: TemporaryPermission = self.get_last_temp_permission()
-        if self.is_allways_permitted:
-            return True
-        elif temp_permission is not None:
-            return temp_permission.from_time <= timezone.now() <= temp_permission.to_time
-
-        # No permission found
-        return False
-
-    def get_last_temp_permission(self) -> 'TemporaryPermission':
-        """
-        :returns: first temporary permission object related to this automobile which are ordered by to_time descending.
-        HINT: Doesn't efficient for database query it's just for development,
-        TODO Should be removed for production.
-        """
-        return self.permissions.order_by('-to_time').first()
-
-        # I don't know wich one is more efficient. (- _ -)
-        # >>> max_to_time = self.permissions.aggrigate(max_to_time=models.Max('to_time'))['max_to_time']
-        # >>> return self.permissions.first(to_time=max_to_time).first()
-
-    def is_anonymous(self) -> bool:
-        """
-        :return: true if automobile is not permitted or not have saved owner info or name_and_model
-        """
-
-        anonymous_conditions: tuple[bool, bool, bool] = (
-            not self.is_permitted,
-            (self.owner_username is None) and (self.owner_first_name is None and self.owner_last_name is None),
-            self.name_and_model is None
-        )
-
-        return all(anonymous_conditions)
-
     @staticmethod
     def is_permitted_conditions() -> Q:
-        return Q(is_allways_permitted=True) | Q(permissions__to_time__gt=timezone.now())
+
+        now = timezone.now()
+        return (Q(is_allways_permitted=True) |
+                (Q(permissions__to_time__gt=now) & Q(permissions__from_time__lte=now)))
+
+    def get_active_permission(self) -> 'TemporaryPermission':
+        return self.permissions.filter(
+            Q(to_time__gt=timezone.now()) & Q(from_time__lte=timezone.now())
+        ).order_by('to_time').first()
 
     @staticmethod
     def is_anonymous_conditions() -> Q:
@@ -143,15 +104,23 @@ class Automobile(models.Model):
     def get_annotated_is_permitted(query_set: QuerySet['Automobile']) -> QuerySet['Automobile']:
         """
         :param query_set: given query set to be annotated.
-        :return: annotated query set with is_permitted to true if automobile has is_permitted_conditions.
+        :return: annotated query set with is_permitted to true if automobile has is_permitted_conditions else false.
         """
-        return query_set.annotate(
+
+        not_distinct_annotated = query_set.annotate(
             is_permitted=Case(
-                When(Automobile.is_permitted_conditions(), then=Value(True)),
+                When(
+                    Automobile.is_permitted_conditions(),
+                    then=Value(True)
+                ),
                 default=Value(False),
                 output_field=models.BooleanField()
             )
         )
+        distinct_with_correct_value_of_is_permitted = not_distinct_annotated.annotate(
+            is_permitted=Max('is_permitted')  # to return true if any exist else false for is_permitted
+        )
+        return distinct_with_correct_value_of_is_permitted
 
     def __repr__(self):
         return (f'Automobile({self.plate= }, '
@@ -159,8 +128,6 @@ class Automobile(models.Model):
                 f' {self.color= }, '
                 f' {self.owner_username= }, {self.owner_first_name= }, {self.owner_last_name= }, '
                 f' {self.is_allways_permitted= }, '
-                f' {self.is_permitted()= }'
-                f'{self.is_anonymous()= }'
                 f')')
 
     def __str__(self):
@@ -170,9 +137,40 @@ class Automobile(models.Model):
 class TemporaryPermission(models.Model):
     automobile = models.ForeignKey(Automobile, on_delete=models.CASCADE, related_name='permissions')
 
-    from_time = models.DateTimeField(auto_now_add=True, )
+    from_time = models.DateTimeField(default=timezone.now)
     to_time = models.DateTimeField()
     description = models.TextField(default="بدون توضیحات")
+
+    @staticmethod
+    def active_permission_condition_for(automobile: Automobile) -> Q:
+
+        now = timezone.now()
+        return Q(automobile=automobile) & (Q(to_time__gt=now) & Q(from_time__lte=now))
+
+    @staticmethod
+    def conflict_with_current_or_future_permissions_conditions(
+            new_permission: 'TemporaryPermission'
+    ) -> Q:
+        """
+        :param new_permission: permission to check these conditions on it.
+        :return: Q() object that represent conflict with current or future permissions.
+        """
+        now = timezone.now()
+        conflict_condition = (
+                Q(
+                    automobile=new_permission.automobile,
+                    from_time__lt=new_permission.to_time,  # check any permission starts before end of new permission
+                    to_time__gt=new_permission.from_time,  # check any permission ends after start of new permission
+                )
+                &
+                Q(to_time__gt=now)
+                )  # check for active or current permissions
+
+        if new_permission.pk is not None:
+            # Exclude the new_permission itself if it exists (update/partial update scenarios)
+            conflict_condition &= ~Q(pk=new_permission.pk)
+
+        return conflict_condition
 
 
 class Place(models.Model):
