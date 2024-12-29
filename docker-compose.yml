@@ -19,6 +19,7 @@ services:
     volumes:
 #      - ./Backend/PLD_API/:/usr/src/app/
       - ./Backend/PLD_API/db.sqlite3:/usr/src/app/db.sqlite3
+      - ./Backend/PLD_API/media:/usr/src/app/media
 
 networks:
   inside-network:
