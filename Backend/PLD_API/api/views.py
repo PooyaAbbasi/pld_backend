@@ -5,9 +5,9 @@ from django.db.models import Prefetch
 from rest_framework import viewsets
 from rest_framework.mixins import (
     CreateModelMixin,
-    UpdateModelMixin,
     ListModelMixin,
     DestroyModelMixin,
+    RetrieveModelMixin,
 )
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
@@ -15,6 +15,7 @@ from rest_framework.response import Response
 from rest_framework.decorators import api_view
 from rest_framework.status import *
 from rest_framework.pagination import PageNumberPagination
+from rest_framework.filters import SearchFilter
 
 from djoser.views import UserViewSet as DjoserUserViewSet
 
@@ -93,8 +94,10 @@ def not_found_view(request):
 class AutomobileViewSet(viewsets.ModelViewSet):
 
     pagination_class = PageNumberPagination
-
     lookup_field = 'plate'
+
+    filter_backends = [SearchFilter, ]
+    search_fields = ['plate', 'owner_username']
 
     @action(detail=False, methods=['get'], url_path='all', url_name='list-all')
     def list_all(self, request, *args, **kwargs):
@@ -117,13 +120,7 @@ class AutomobileViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['get'], )
     def permissions(self, request, plate, *args, **kwargs):
-        related_permissions = TemporaryPermission.objects.filter(automobile_id=plate).all()
-        filtered_queryset = self.filter_queryset(related_permissions)
-
-        page = self.paginate_queryset(filtered_queryset)
-        if page is not None:
-            serializer = TemporaryPermissionSerializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+        related_permissions = TemporaryPermission.objects.filter(automobile_id=plate).order_by('-to_time')
 
         serializer = TemporaryPermissionSerializer(related_permissions, many=True)
         return Response(serializer.data, status=HTTP_200_OK)
@@ -132,9 +129,6 @@ class AutomobileViewSet(viewsets.ModelViewSet):
 
         # annotate the query set with is_permitted_conditions of Automobile model, as `is_permitted`.
         query_set = Automobile.get_annotated_is_permitted(Automobile.objects.all())
-
-        for auto in query_set:
-            print(repr(auto))
 
         match self.action:
             case 'list_all':
@@ -152,7 +146,7 @@ class AutomobileViewSet(viewsets.ModelViewSet):
 
     def get_permissions(self):
 
-        if self.action in ('retrieve', 'permissions'):
+        if self.action in ('retrieve',):
             # ordinary users only have permission to read detail of automobile
             return [IsAuthenticated()]
         else:
@@ -185,6 +179,7 @@ class TemporaryPermissionViewSet(
     CreateModelMixin,
     ListModelMixin,
     DestroyModelMixin,
+    RetrieveModelMixin,
     viewsets.GenericViewSet
 ):
 
@@ -212,3 +207,9 @@ class TemporaryPermissionViewSet(
             return [IsAuthenticated()]
         else:
             return [IsManagerUser()]
+
+    def get_serializer_class(self):
+        if self.action == 'retrieve':
+            return TempPermissionDetailSerializer
+        else:
+            return TemporaryPermissionSerializer

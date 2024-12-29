@@ -34,8 +34,9 @@ class User(AbstractUser):
     profile_image = models.ImageField(
         upload_to='profile_pics/',
         verbose_name='Profile Image',
+        help_text='image for profile of user',
         null=True,
-        help_text='image for profile of user'
+        default='defaults/default_profile_image.jpg'
     )
 
     email = None  # email field is substitute with phone_number
@@ -140,6 +141,7 @@ class TemporaryPermission(models.Model):
     from_time = models.DateTimeField(default=timezone.now)
     to_time = models.DateTimeField()
     description = models.TextField(default="بدون توضیحات")
+    granted_by = models.ForeignKey(User, on_delete=models.RESTRICT, related_name='granted_perms')
 
     @staticmethod
     def active_permission_condition_for(automobile: Automobile) -> Q:

@@ -173,6 +173,7 @@ class TemporaryPermissionSerializer(serializers.ModelSerializer):
     automobile = serializers.PrimaryKeyRelatedField(queryset=Automobile.objects.all())
     from_time = JalaliDateTimeField()
     to_time = JalaliDateTimeField()
+    granted_by = serializers.HiddenField(default=serializers.CurrentUserDefault())
 
     class Meta:
         model = TemporaryPermission
@@ -217,3 +218,12 @@ class ModifyTempPermissionSerializer(TemporaryPermissionSerializer):
         model = TemporaryPermissionSerializer.Meta.model
         fields = TemporaryPermissionSerializer.Meta.fields
         read_only_fields = ['automobile', 'id']
+
+
+class TempPermissionDetailSerializer(TemporaryPermissionSerializer):
+
+    granted_by = UserSerializer(read_only=True)
+
+    class Meta(TemporaryPermissionSerializer.Meta):
+        model = TemporaryPermissionSerializer.Meta.model
+        fields = TemporaryPermissionSerializer.Meta.fields

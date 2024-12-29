@@ -17,3 +17,6 @@ static/
 
 # Media files (optional)
 media/
+
+# exclude defaults
+!media/defaults/
