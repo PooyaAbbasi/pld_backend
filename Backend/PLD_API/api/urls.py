@@ -7,6 +7,8 @@ from .models import Automobile
 router = DefaultRouter()
 router.register('auth/users', UserViewSet)
 router.register('temp_permissions', TemporaryPermissionViewSet, basename='temp_permissions')
+router.register('places', PlaceViewSet, basename='place')
+router.register('gate', GateViewSet, basename='gate')
 
 app_name = 'api'
 

@@ -7,17 +7,20 @@ from rest_framework.mixins import (
     CreateModelMixin,
     ListModelMixin,
     DestroyModelMixin,
-    RetrieveModelMixin,
+    RetrieveModelMixin, UpdateModelMixin,
 )
 from rest_framework.decorators import action
 from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
 from rest_framework.response import Response
+from rest_framework.request import Request
 from rest_framework.decorators import api_view
 from rest_framework.status import *
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter
 
+
 from djoser.views import UserViewSet as DjoserUserViewSet
+from rest_framework_simplejwt.views import TokenObtainPairView
 
 from .serializers import *
 from .models import *
@@ -84,6 +87,34 @@ class UserViewSet(DjoserUserViewSet):
     reset_username_confirm = None
     reset_password = None
     reset_password_confirm = None
+
+    @action(detail=False, methods=['get'], permission_classes=[IsAuthenticated])
+    def logout(self, request: Request):
+
+        if not request.user.is_manager:
+            place_id = request.COOKIES.get('place_id')
+            if not place_id:
+                return Response(
+                    data={
+                        'message': 'place_id is required',
+                    },
+                    status=HTTP_400_BAD_REQUEST
+                )
+
+            place = get_object_or_404(Place, id=place_id)
+
+            data = {"message": "با موفقیت خارج شدید"}
+            if not place.is_assigned:
+                # only include some message in response and let security agent log out.
+                data = {'message': 'این مکان تنظیم نشده است، باید توسط مدیریت تنظیم شود'},
+
+            try:
+                SecurityAssignment.remove_security_agent(agent=request.user, place=place)
+                return Response(data=data, status=HTTP_200_OK)
+            except ValidationError as e:
+                return Response(data={'message': str(e)}, status=HTTP_400_BAD_REQUEST)
+
+        return Response(data={"message": "با موفقیت خارج شدید"}, status=HTTP_200_OK)
 
 
 @api_view(['GET', 'post'])
@@ -213,3 +244,103 @@ class TemporaryPermissionViewSet(
             return TempPermissionDetailSerializer
         else:
             return TemporaryPermissionSerializer
+
+
+class PlaceViewSet(
+    CreateModelMixin,
+    ListModelMixin,
+    DestroyModelMixin,
+    UpdateModelMixin,
+    viewsets.GenericViewSet
+):
+
+    queryset = Place.objects.prefetch_related('gates')
+    serializer_class = PlaceSerializer
+    permission_classes = [IsManagerUser,]
+
+    @action(detail=False, methods=['post'])
+    def set_place(self, request, *args, **kwargs):
+        place_id = self.request.data.get('place_id')
+        if not place_id:
+            return Response({'message': 'place_id is required'}, status=HTTP_400_BAD_REQUEST)
+
+        # check client place is sat before or not.
+        try:
+            self.check_current_place()
+        except ValidationError as e:
+            return Response({'message': f'{e.detail}'}, status=HTTP_400_BAD_REQUEST)
+
+        place = get_object_or_404(Place, id=place_id)
+        try:
+            # check target place is sat for other client before or not.
+            self.set_place_assigned(place)
+        except ValidationError as e:
+            return Response({'message': f'{e.detail}'}, status=HTTP_400_BAD_REQUEST)
+
+        # set place_id in cookies for this client
+        response = Response(data={"message": f"مکان "
+                                             f"{place.name}"
+                                             f" برای این سیستم با موفقیت ثبت شد"},
+                            status=HTTP_200_OK)
+
+        one_year_in_seconds = 60 * 60 * 24 * 365
+        response.set_cookie(
+            key='place_id',
+            value=place_id,
+            httponly=True,
+            max_age=one_year_in_seconds,
+            samesite='Strict',
+            path='/api/',
+            domain=settings.DOMAIN,
+        )
+
+        return response
+
+    def check_current_place(self):
+        # check client place is sat before or not.
+        current_place_id = self.request.COOKIES.get('place_id')
+        if current_place_id is not None:
+            if Place.objects.filter(id=current_place_id, is_assigned=True).exists():
+                raise ValidationError('مکان دیگری هم اکنون برای این سیستم ثبت شده')
+
+    def set_place_assigned(self, place: Place):
+        if place.is_assigned:
+            raise ValidationError('این مکان پیش از این برای این سیستم یا سیستم دیگری ثبت شده'
+                                  ' ابتدا باید آنرا آزاد کنید یا همه مکان ها را بازنشانی کنید')
+
+        place.is_assigned = True
+        place.save()
+
+    @action(detail=False, methods=['post'])
+    def remove_place(self, request, *args, **kwargs):
+        place_id = self.request.COOKIES.get('place_id')
+        if place_id is not None:
+            place = get_object_or_404(Place, id=place_id)
+            place.is_assigned = False
+            place.save()
+
+        response = Response(data={'message': "مکان  سیستم با موفقیت حذف شد"}, status=HTTP_200_OK)
+        response.delete_cookie(
+            key='place_id',
+            path='/api/',
+            domain=settings.DOMAIN,
+            samesite='Strict',
+        )
+        return response
+
+    @action(detail=False, methods=['post'])
+    def reset_all_places(self, request, *args, **kwargs):
+        Place.reset_assigned()
+        return Response(data={'message': "مکان ها با موفقیت بازنشانی شدند"}, status=HTTP_200_OK)
+
+
+class GateViewSet(
+    CreateModelMixin,
+    DestroyModelMixin,
+    UpdateModelMixin,
+    viewsets.GenericViewSet
+):
+    queryset = Gate.objects.all()
+    permission_classes = [IsManagerUser,]
+    serializer_class = GateCreateSerializer
+

@@ -30,6 +30,8 @@ ALLOWED_HOSTS = []
 
 INTERNAL_IPS = ['127.0.0.1',]
 
+DOMAIN = '127.0.0.1'
+
 # Application definition
 
 INSTALLED_APPS = [
@@ -181,10 +183,10 @@ DJOSER = {
 
 
 SIMPLE_JWT = {
-    'UPDATE_LAST_LOGIN': True,
+    'UPDATE_LAST_LOGIN': False,
 
-    'ACCESS_TOKEN_LIFETIME': timedelta(hours=1),
-    'REFRESH_TOKEN_LIFETIME': timedelta(hours=8),
+    'ACCESS_TOKEN_LIFETIME': timedelta(hours=8),
+    'REFRESH_TOKEN_LIFETIME': timedelta(days=1),
 
     "AUTH_HEADER_TYPES": ("JWT",),
 

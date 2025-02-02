@@ -3,6 +3,7 @@ from django.contrib.auth.models import AbstractUser, BaseUserManager
 from django.db import models
 from django.db.models import QuerySet, Value, Q, F, When, Case, Max, OuterRef
 from django.utils import timezone
+from rest_framework.exceptions import ValidationError
 
 
 class UserManager(BaseUserManager):
@@ -178,6 +179,20 @@ class TemporaryPermission(models.Model):
 class Place(models.Model):
     name = models.CharField(max_length=64, unique=True)
     security = models.ManyToManyField(to=User, through='api.SecurityAssignment', related_name='secured_gates')
+    is_assigned = models.BooleanField(default=False, )
+
+    def set_assigned(self):
+        if self.is_assigned:  # means this place is assigned before
+            raise ValidationError('این مکان پیش از این ثبت شده ابتدا باید آنرا آزاد کنید یا همه مکان ها را بازنشانی کنید')
+        else:
+            self.is_assigned = True
+            self.save()
+
+    @classmethod
+    def reset_assigned(cls):
+        for place in cls.objects.all():
+            place.is_assigned = False
+            place.save()
 
 
 class Gate(models.Model):
@@ -223,9 +238,59 @@ class Traffic(models.Model):
 class SecurityAssignment(models.Model):
     security_agent = models.ForeignKey(to=User, on_delete=models.RESTRICT,)
     place = models.ForeignKey(to=Place, on_delete=models.RESTRICT,)
-    start_time = models.DateTimeField()
-    end_time = models.DateTimeField()
+    start_time = models.DateTimeField(default=timezone.now)
+
+    # end_time == null means this agent is in `place` now
+    end_time = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         ordering = ('-start_time',)
 
+    @classmethod
+    def assign_security_agent(cls, agent: User, place: Place):
+        """
+        Create a SecurityAssignment object for the passed **agent** and **place**.
+
+        :param agent: The security agent to assign.
+        :param place: The place to assign the agent to.
+        :raises ValidationError: If another agent is already assigned to the place.
+        """
+
+        # Try to get or create an assignment for the place
+        assignment, created = cls.objects.get_or_create(
+            place=place,
+            end_time__isnull=True,
+            defaults={
+                'start_time': timezone.now(),
+                'security_agent': agent,
+                'end_time': None,
+            }
+        )
+
+        if not created and assignment.security_agent != agent:
+            raise ValidationError(
+                f'مامور دیگری ({assignment.security_agent.username}) قبلا به این مکان ({place.name}) وارد شده و هنوز خارج نشده.'
+            )
+
+    @classmethod
+    def remove_security_agent(cls, agent: User, place: Place):
+
+        current_assignment = cls.get_current_assignment_for(place)
+        if current_assignment is None:
+            # there is no login before for this place.
+            raise ValidationError('اخیرا هیچ حراستی به این مکان وارد نشده')
+        elif not current_assignment.security_agent == agent:
+            # this agent didn't log in this place.
+            raise ValidationError('حراست کنونی به این مکان وارد نشده است')
+        else:
+            current_assignment.end_time = timezone.now()
+            current_assignment.save()
+
+    @classmethod
+    def get_current_security_agent(cls, place: Place) -> User | None:
+        obj: SecurityAssignment = cls.get_current_assignment_for(place)
+        return obj.security_agent if obj else None
+
+    @classmethod
+    def get_current_assignment_for(cls, place: Place) -> 'SecurityAssignment':
+        return cls.objects.filter(place=place, end_time__isnull=True).first()

@@ -11,6 +11,8 @@ from djoser.serializers import (
     SetPasswordSerializer as BaseSetPasswordSerializer,
 )
 from rest_framework import serializers
+from django.http import HttpRequest
+
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.serializers import (
     TokenObtainPairSerializer as BaseTokenObtainPairSerializer
@@ -71,12 +73,48 @@ class TokenObtainPairSerializer(BaseTokenObtainPairSerializer):
     """
         overrides BaseTokenObtainPairSerializer in order to add 'is_manager' filed to response data.
     """
-    is_manager = serializers.BooleanField(read_only=True)
 
     def validate(self, attrs: Dict[str, Any]) -> Dict[str, str]:
         data = super().validate(attrs)
-        data['is_manager'] = self.user.is_manager
+
+        is_user_manager = self.user.is_manager
+        print(self.context.get('request').COOKIES.get('place_id'))
+        if not is_user_manager:  # to assign security agents
+            place = self.__get_place_obj_from_cookie()
+            # create an assignment or rais ValidationError if any assignment already exists.
+            SecurityAssignment.assign_security_agent(self.user, place)
+
+        data['is_manager'] = is_user_manager
         return data
+
+    def __get_place_obj_from_cookie(self) -> Place:
+        """
+        :return: Place object with `place_id` which is provided in cookies of request.
+                else raises ValidationError.
+        """
+        request: HttpRequest = self.context.get('request')
+        place_id = request.COOKIES.get('place_id')
+        print(request.COOKIES)
+        return self.__class__.__check_and_get_place(place_id)
+
+    @staticmethod
+    def __check_and_get_place(place_id) -> Place:
+        if place_id is None:
+            raise (ValidationError('اطلاعات مربوط به مکان برای ورود کاربر حراست نیاز است،'
+                                   ' باید مکان برای این سیستم تنظیم شود.'))
+
+        else:
+            try:
+                place = Place.objects.get(pk=place_id)
+            except Place.DoesNotExist:
+                raise ValidationError('مکانی با این اطلاعات در پایگاه داده موجود نیست.')
+
+            # in database is_assigned is False but in cookie exists
+            # manager should use remove endpoint and assign this place agin
+            if not place.is_assigned:
+                raise ValidationError('این مکان تنظیم نشده، مدیریت باید ابتدا آنرا تنظیم کند.')
+
+        return place
 
 
 class CurrentUserSerializer(UserSerializer):
@@ -227,3 +265,36 @@ class TempPermissionDetailSerializer(TemporaryPermissionSerializer):
     class Meta(TemporaryPermissionSerializer.Meta):
         model = TemporaryPermissionSerializer.Meta.model
         fields = TemporaryPermissionSerializer.Meta.fields
+
+
+class GateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Gate
+        fields = ['id', 'name', 'type', 'permission_needed']
+        read_only_fields = ['id',]
+
+
+class PlaceSerializer(serializers.ModelSerializer):
+
+    gates = GateSerializer(many=True, read_only=True)
+    is_this_client_place = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Place
+        fields = ['id', 'name', 'gates', 'is_assigned', 'is_this_client_place']
+        read_only_fields = ['id', 'is_this_client_place', 'is_assigned']
+
+    def get_is_this_client_place(self, obj: Place) -> bool:
+        client_place_id = self.context['request'].COOKIES.get('place_id')
+        if client_place_id is not None:
+            return int(client_place_id) == obj.id and obj.is_assigned
+        else:
+            return False
+
+
+class GateCreateSerializer(GateSerializer):
+    place = serializers.PrimaryKeyRelatedField(queryset=Place.objects.all())
+
+    class Meta(GateSerializer.Meta):
+        model = Gate
+        fields = GateSerializer.Meta.fields + ['place']
