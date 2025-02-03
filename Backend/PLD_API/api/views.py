@@ -17,6 +17,7 @@ from rest_framework.decorators import api_view
 from rest_framework.status import *
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter
+from rest_framework.generics import ListAPIView, ListCreateAPIView
 
 
 from djoser.views import UserViewSet as DjoserUserViewSet
@@ -25,7 +26,7 @@ from rest_framework_simplejwt.views import TokenObtainPairView
 from .serializers import *
 from .models import *
 from .permissions import IsManagerUser
-
+from .filters import JalaliDateTimeRangeFilter
 
 class UserViewSet(DjoserUserViewSet):
 
@@ -344,3 +345,17 @@ class GateViewSet(
     permission_classes = [IsManagerUser,]
     serializer_class = GateCreateSerializer
 
+
+class ListSecurityAssignmentView(ListAPIView):
+
+    permission_classes = [IsManagerUser,]
+    queryset = SecurityAssignment.objects.select_related('security_agent', 'place').all()
+    serializer_class = SecurityAssignmentSerializer
+
+    pagination_class = PageNumberPagination
+
+    filter_backends = [SearchFilter, JalaliDateTimeRangeFilter]
+    search_fields = ['security_agent__username', 'place__name']
+
+    # specify target date time field for this model to filter
+    date_time_field = 'start_time'

@@ -47,4 +47,6 @@ urlpatterns = [
             name='automobiles-permissions-list'),
 
 
+    path('security_assignments/', ListSecurityAssignmentView.as_view(), name='security-assignments'),
+
 ] + router.urls

@@ -32,6 +32,37 @@ def phone_number_validator(phone_number: str) -> str:
     return phone_number
 
 
+class JalaliDateTimeField(serializers.DateTimeField):
+    """
+    Custom DateTimeField that converts between UTC Gregorian datetimes and
+    Jalali formatted strings (using settings.DATETIME_FORMAT).
+
+    - to_representation: Converts a datetime (naive or UTC) to the current timezone,
+      then to Jalali and returns a formatted string.
+    - to_internal_value: Parses a Jalali formatted string and converts it to a UTC datetime.
+    """
+    def to_representation(self, value):
+        aware_dt = timezone.make_aware(value) if timezone.is_naive(value) else value
+        local_dt = aware_dt.astimezone(timezone.get_current_timezone())
+        jalali_dt = jdatetime.datetime.fromgregorian(datetime=local_dt)
+        return jalali_dt.strftime(settings.DATETIME_FORMAT)
+
+    def to_internal_value(self, data) -> timezone.datetime | None:
+        if not data:
+            return None
+        try:
+            # Parse input string using the expected Jalali format.
+            jalali_dt = jdatetime.datetime.strptime(data, settings.DATETIME_FORMAT)
+        except ValueError:
+            raise ValidationError(f"'فرمت زمان ورودی باید به صورت {settings.DATETIME_FORMAT} باشد.'")
+
+        jalali_aware = timezone.make_aware(jalali_dt)
+
+        gregorian_dt = jalali_aware.togregorian()
+        utc_dt = timezone.localtime(gregorian_dt, timezone=timezone.timezone.utc)
+        return utc_dt
+
+
 class UserCreateSerializer(BaseUserCreateSerializer):
 
     is_manager = serializers.BooleanField(required=False)
@@ -183,29 +214,6 @@ class AutomobileDetailSerializer(AutomobileSerializer):
         return None
 
 
-class JalaliDateTimeField(serializers.DateTimeField):
-
-    def to_representation(self, value):
-        aware_local_datetime = timezone.make_aware(value) if timezone.is_naive(value) else value
-
-        local_datetime = aware_local_datetime.astimezone(timezone.get_current_timezone())
-        jalali_local_datetime = jdatetime.datetime.fromgregorian(datetime=local_datetime)
-        return jalali_local_datetime.strftime(settings.DATETIME_FORMAT)
-
-    def to_internal_value(self, data):
-        if not data:
-            return None
-        try:
-            jalali_datetime = jdatetime.datetime.strptime(data, settings.DATETIME_FORMAT)
-        except ValueError:
-            raise ValidationError("'فرمت زمان ورودی باید به صورت YYYY/MM/DD-HH:MM:SS باشد.'")
-
-        jalali_aware_datetime = timezone.make_aware(jalali_datetime)
-        gregorian_tehran_datetime = jalali_aware_datetime.togregorian()
-        utc_datetime = timezone.localtime(gregorian_tehran_datetime, timezone=timezone.timezone.utc)
-        return utc_datetime
-
-
 class TemporaryPermissionSerializer(serializers.ModelSerializer):
 
     automobile = serializers.PrimaryKeyRelatedField(queryset=Automobile.objects.all())
@@ -298,3 +306,15 @@ class GateCreateSerializer(GateSerializer):
     class Meta(GateSerializer.Meta):
         model = Gate
         fields = GateSerializer.Meta.fields + ['place']
+
+
+class SecurityAssignmentSerializer(serializers.ModelSerializer):
+    start_time = JalaliDateTimeField(read_only=True)
+    end_time = JalaliDateTimeField(read_only=True)
+    security_agent = serializers.SlugRelatedField(slug_field='username', read_only=True)
+    place = serializers.SlugRelatedField(slug_field='name', read_only=True)
+
+    class Meta:
+        model = SecurityAssignment
+        fields = ['place', 'security_agent', 'start_time', 'end_time',]
+
