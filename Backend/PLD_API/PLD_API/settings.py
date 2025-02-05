@@ -27,7 +27,7 @@ SECRET_KEY = 'django-insecure-aly!!7jg!6nwsh*ve5u^q5(h^*x2!a*2d@$pcx@pcupbo8w#c)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
 INTERNAL_IPS = ['127.0.0.1', 'localhost']
 
@@ -202,10 +202,8 @@ CORS_ALLOW_HEADERS = (
     "x-requested-with",
 )
 CORS_ALLOW_CREDENTIALS = True
-SESSION_COOKIE_SAMESITE = 'Lax'
-
-CSRFCOOKIE_SAMESITE = 'Lax'
-
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 

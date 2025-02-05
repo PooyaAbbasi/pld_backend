@@ -260,7 +260,7 @@ class PlaceViewSet(
     permission_classes = [IsManagerUser,]
 
     @action(detail=False, methods=['post'])
-    def set_place(self, request, *args, **kwargs):
+    def set_place(self, request: Request, *args, **kwargs):
         place_id = self.request.data.get('place_id')
         if not place_id:
             return Response({'message': 'place_id is required'}, status=HTTP_400_BAD_REQUEST)
@@ -290,10 +290,10 @@ class PlaceViewSet(
             value=place_id,
             httponly=True,
             max_age=one_year_in_seconds,
-            samesite='Lax',
+            samesite='None' if not settings.DEBUG else 'Lax',
             path='/api/',
             secure=(not settings.DEBUG),
-            domain=settings.DOMAIN,
+
         )
 
         return response
@@ -325,8 +325,7 @@ class PlaceViewSet(
         response.delete_cookie(
             key='place_id',
             path='/api/',
-            domain=settings.DOMAIN,
-            samesite='Lax',
+            samesite='None' if not settings.DEBUG else 'Lax',
         )
         return response
 
@@ -337,8 +336,7 @@ class PlaceViewSet(
         response.delete_cookie(
             key='place_id',
             path='/api/',
-            domain=settings.DOMAIN,
-            samesite='Lax',
+            samesite='None' if not settings.DEBUG else 'Lax',
         )
         return response
 
