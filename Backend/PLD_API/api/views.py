@@ -290,8 +290,9 @@ class PlaceViewSet(
             value=place_id,
             httponly=True,
             max_age=one_year_in_seconds,
-            samesite='Strict',
+            samesite='Lax',
             path='/api/',
+            secure=(not settings.DEBUG),
             domain=settings.DOMAIN,
         )
 
@@ -325,14 +326,21 @@ class PlaceViewSet(
             key='place_id',
             path='/api/',
             domain=settings.DOMAIN,
-            samesite='Strict',
+            samesite='Lax',
         )
         return response
 
     @action(detail=False, methods=['post'])
     def reset_all_places(self, request, *args, **kwargs):
         Place.reset_assigned()
-        return Response(data={'message': "مکان ها با موفقیت بازنشانی شدند"}, status=HTTP_200_OK)
+        response = Response(data={'message': "مکان ها با موفقیت بازنشانی شدند"}, status=HTTP_200_OK)
+        response.delete_cookie(
+            key='place_id',
+            path='/api/',
+            domain=settings.DOMAIN,
+            samesite='Lax',
+        )
+        return response
 
 
 class GateViewSet(
