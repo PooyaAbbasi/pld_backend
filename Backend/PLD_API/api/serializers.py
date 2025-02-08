@@ -13,6 +13,7 @@ from djoser.serializers import (
 from rest_framework import serializers
 from django.http import HttpRequest
 
+
 from rest_framework.exceptions import ValidationError
 from rest_framework_simplejwt.serializers import (
     TokenObtainPairSerializer as BaseTokenObtainPairSerializer
@@ -109,7 +110,6 @@ class TokenObtainPairSerializer(BaseTokenObtainPairSerializer):
         data = super().validate(attrs)
 
         is_user_manager = self.user.is_manager
-        print(self.context.get('request').COOKIES.get('place_id'))
         if not is_user_manager:  # to assign security agents
             place = self.__get_place_obj_from_cookie()
             # create an assignment or rais ValidationError if any assignment already exists.
@@ -125,7 +125,6 @@ class TokenObtainPairSerializer(BaseTokenObtainPairSerializer):
         """
         request: HttpRequest = self.context.get('request')
         place_id = request.COOKIES.get('place_id')
-        print(request.COOKIES)
         return self.__class__.__check_and_get_place(place_id)
 
     @staticmethod
@@ -160,8 +159,18 @@ class SetPasswordSerializer(serializers.Serializer):
     new_password = serializers.CharField(write_only=True, required=True)
 
 
+def plate_validator(plate: str):
+    pattern = re.compile(Automobile.FULL_MATCH_PLATE_PATTERN)
+    clean_plate = plate.strip()
+    if not pattern.match(clean_plate):
+        raise ValidationError("Invalid plate format")
+
+    return clean_plate
+
+
 class AutomobileSerializer(serializers.ModelSerializer):
 
+    # given queryset should be annotated with is_permitted
     is_permitted = serializers.BooleanField(read_only=True)
 
     class Meta:
@@ -172,16 +181,9 @@ class AutomobileSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'owner_username': {'default': None, 'required': False},
             'is_allways_permitted': {'write_only': True, 'required': False, 'default': False},
+            'plate': {'validators': [plate_validator, ]},
         }
         unique_together = ('plate', 'owner_username')
-
-    def plate_validator(self, plate: str) -> str:
-        pattern = re.compile(self.Meta.model.FULL_MATCH_PLATE_PATTERN)
-        clean_plate = plate.strip()
-        if not pattern.match(clean_plate):
-            raise ValidationError("Invalid plate format")
-
-        return clean_plate
 
 
 class AutomobileUpdateSerializer(AutomobileSerializer):
@@ -318,3 +320,70 @@ class SecurityAssignmentSerializer(serializers.ModelSerializer):
         model = SecurityAssignment
         fields = ['place', 'security_agent', 'start_time', 'end_time',]
 
+
+class BriefAutomobileSerializer(AutomobileSerializer):
+    """
+        Only serialize some profiling data about automobile obj contains:
+        plate, name_and_model, color, and owner info.
+    """
+    class Meta(AutomobileSerializer.Meta):
+        fields = ['plate', 'name_and_model', 'color',
+                  'owner_username', 'owner_first_name', 'owner_last_name']
+
+
+class TrafficSerializer(serializers.ModelSerializer):
+    """
+        Serializer for creating and retrieving Traffic records.
+
+    For creation:
+      - Expects 'gate_id' (write-only) and 'automobile_plate' (write-only) as input.
+      - Other required Traffic fields (e.g. security agent, permitted status, time)
+        are determined automatically during creation based on permissions and security assignments.
+
+    For retrieval:
+      - Returns detailed information including the associated automobile (via BriefAutomobileSerializer),
+        gate (by name), place (derived from gate), security agent's username, and a formatted 'date_time'.
+
+    Note:
+      - The 'security_agent' is automatically assigned in the create() method using the current
+        assignment for the given gate's place.
+
+    """
+
+    gate_id = serializers.PrimaryKeyRelatedField(source='gate', queryset=Gate.objects.all(), write_only=True)
+    automobile_plate = serializers.CharField(write_only=True, validators=[plate_validator, ])
+
+    automobile = BriefAutomobileSerializer(read_only=True)
+    gate = serializers.SlugRelatedField(slug_field='name', read_only=True)
+    place = serializers.ReadOnlyField(source='gate.place.name')
+    security_agent_username = serializers.ReadOnlyField(source='security_agent.username', allow_null=True)
+    date_time = JalaliDateTimeField(source='time', read_only=True)
+
+    class Meta:
+        model = Traffic
+        fields = ['automobile', 'gate_id', 'gate',
+                  'place', 'security_agent_username', 'time',
+                  'image', 'automobile_plate', 'permitted', 'date_time'
+                  ]
+        extra_kwargs = {
+            'permitted': {'read_only': True},
+            'time': {'write_only': True}
+        }
+
+    def create(self, validated_data):
+
+        # assign current security agent
+        gate: Gate = validated_data.get('gate')
+        security_agent: User = SecurityAssignment.get_current_security_agent(gate.place)
+        validated_data['security_agent'] = security_agent
+
+        # try to create an automobile if it doesn't exist before.
+        automobile_plate = validated_data.pop('automobile_plate')
+        automobile, created = Automobile.objects.get_or_create(plate=automobile_plate)
+        validated_data['automobile'] = automobile
+
+        # determine is this automobile permitted to crossing this gate.
+        permitted = Traffic.is_automobile_permitted(automobile, is_new_added_automobile=created, gate=gate)
+        validated_data['permitted'] = permitted
+
+        return super().create(validated_data)

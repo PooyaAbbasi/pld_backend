@@ -228,11 +228,41 @@ class Traffic(models.Model):
     automobile = models.ForeignKey(to=Automobile, on_delete=models.RESTRICT,)
     gate = models.ForeignKey(to=Gate, on_delete=models.RESTRICT,)
     image = models.ImageField(upload_to=auto_traffic_image, )
-    time = models.DateTimeField()
-    security_agent = models.ForeignKey(to=User, on_delete=models.RESTRICT, related_name='traffics')
+    time = models.DateTimeField(default=timezone.now)
+    security_agent = models.ForeignKey(to=User, on_delete=models.RESTRICT,
+                                       related_name='traffics', null=True, blank=True)
+
+    permitted = models.BooleanField(default=False)
 
     class Meta:
         ordering = ('-time',)
+
+    @staticmethod
+    def is_automobile_permitted(automobile: Automobile, gate: Gate, is_new_added_automobile: bool = False) -> bool:
+        """
+        :param automobile: automobile object
+        :param is_new_added_automobile: if automobile created just before.
+        :param gate: gate object that automobile crossed.
+        :return: if gate.permission_needed is True and automobile have active permission
+        or if gate.permission_needed is False , returns True. elsewhere False.
+        """
+        if not gate.permission_needed:
+            # if no need to check permission for this gate.
+            return True
+        else:
+            if is_new_added_automobile:
+                # new automobile won't have any permission as it's created just before
+                # checking it will prevent query to database for finding active permission of automobile.
+                return False
+            else:
+                now = timezone.now()
+                permission = (
+                        automobile.is_allways_permitted
+                        or
+                        automobile.permissions.filter(to_time__gt=now, from_time__lte=now).exists()
+                )
+
+                return permission
 
 
 class SecurityAssignment(models.Model):

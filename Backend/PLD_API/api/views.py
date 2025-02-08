@@ -10,10 +10,10 @@ from rest_framework.mixins import (
     RetrieveModelMixin, UpdateModelMixin,
 )
 from rest_framework.decorators import action
-from rest_framework.permissions import IsAuthenticated, SAFE_METHODS
+from rest_framework.permissions import IsAuthenticated, SAFE_METHODS, AllowAny
 from rest_framework.response import Response
 from rest_framework.request import Request
-from rest_framework.decorators import api_view
+from rest_framework.decorators import api_view, authentication_classes, permission_classes
 from rest_framework.status import *
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter
@@ -21,13 +21,13 @@ from rest_framework.generics import ListAPIView, ListCreateAPIView
 
 
 from djoser.views import UserViewSet as DjoserUserViewSet
-from rest_framework_simplejwt.views import TokenObtainPairView
+from django_filters.rest_framework import DjangoFilterBackend
 
 from .serializers import *
 from .models import *
 from .permissions import IsManagerUser
-from .filters import JalaliDateTimeRangeFilter
-
+from .filters import *
+from .authenticators import *
 class UserViewSet(DjoserUserViewSet):
 
     urls_to_exclude = ['set_username', 'reset_username']
@@ -359,3 +359,34 @@ class ListSecurityAssignmentView(ListAPIView):
 
     # specify target date time field for this model to filter
     date_time_field = 'start_time'
+
+
+class TrafficView(ListCreateAPIView):
+
+    serializer_class = TrafficSerializer
+    queryset = Traffic.objects.select_related('gate__place', 'security_agent', 'automobile').all()
+    pagination_class = PageNumberPagination
+    filter_backends = [DjangoFilterBackend, JalaliDateTimeRangeFilter]
+    date_time_field = 'time'
+    filterset_class = TrafficFilterSet
+
+    def get_authenticators(self):
+        if self.request.method == 'POST':  # just AI model can create traffic records
+            return [AIModelAuthentication(), ]
+        else:
+            return super().get_authenticators()
+
+    def get_permissions(self):
+        if self.request.method == 'POST':
+            # as AIModelAuthentication doesn't create user it just authenticates token
+            return [AllowAny()]
+        else:
+            return [IsAuthenticated()]
+
+    def create(self, request, *args, **kwargs):
+
+        serializer = self.get_serializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data, status=HTTP_201_CREATED)
+

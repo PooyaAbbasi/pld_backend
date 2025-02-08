@@ -49,4 +49,8 @@ urlpatterns = [
 
     path('security_assignments/', ListSecurityAssignmentView.as_view(), name='security-assignments'),
 
+    path('traffics/', TrafficView.as_view(), name='traffic'),
+
+
+
 ] + router.urls

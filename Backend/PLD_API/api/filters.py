@@ -1,7 +1,11 @@
 from rest_framework.filters import BaseFilterBackend
+
+from .models import Traffic
 from .serializers import JalaliDateTimeField
 from django.utils import timezone
 from django.core.exceptions import ImproperlyConfigured
+
+from django_filters import rest_framework as filters
 
 
 class JalaliDateTimeRangeFilter(BaseFilterBackend):
@@ -58,3 +62,17 @@ class JalaliDateTimeRangeFilter(BaseFilterBackend):
         validated_until_dt = jalali_dt_field.to_internal_value(until_dt)
 
         return validated_from_dt, validated_until_dt
+
+
+class TrafficFilterSet(filters.FilterSet):
+
+    place = filters.CharFilter('gate__place__name', 'icontains')
+    gate = filters.CharFilter('gate__name', 'icontains')
+    security_agent = filters.CharFilter('security_agent__username', 'icontains')
+    automobile = filters.CharFilter('automobile__plate', 'icontains')
+    permitted = filters.BooleanFilter()
+    automobile_owner = filters.CharFilter('automobile__owner_username', 'icontains')
+
+    class Meta:
+        model = Traffic
+        fields = ['automobile', 'place', 'gate', 'security_agent', 'permitted', 'automobile_owner']

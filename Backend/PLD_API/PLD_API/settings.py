@@ -198,8 +198,11 @@ CORS_ALLOW_HEADERS = (
     'Content-Type',
     'Authorization',
     "x-requested-with",
+    'x-ai-auth',
 )
 
 
 DATETIME_FORMAT = '%Y/%m/%d-%H:%M:%S'
 DATETIME_INPUT_FORMATS = ['%Y/%m/%d-%H:%M:%S', ]
+
+AI_MODEL_AUTH_TOKEN = "ai_auth_token"
