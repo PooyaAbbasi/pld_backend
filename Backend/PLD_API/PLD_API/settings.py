@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/5.1/ref/settings/
 from datetime import timedelta
 from pathlib import Path
 import os
+from corsheaders.defaults import default_headers
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -26,11 +27,11 @@ SECRET_KEY = 'django-insecure-aly!!7jg!6nwsh*ve5u^q5(h^*x2!a*2d@$pcx@pcupbo8w#c)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
 
-INTERNAL_IPS = ['127.0.0.1',]
+INTERNAL_IPS = ['127.0.0.1', 'localhost']
 
-DOMAIN = '127.0.0.1'
+DOMAIN = 'localhost'
 
 # Application definition
 
@@ -195,12 +196,24 @@ SIMPLE_JWT = {
 
 CORS_ALLOW_ALL_ORIGINS = True
 CORS_ALLOW_HEADERS = (
+    *default_headers,
     'Content-Type',
     'Authorization',
     "x-requested-with",
     'x-ai-auth',
 )
+CORS_ALLOW_CREDENTIALS = True
+SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
 
+CSRF_TRUSTED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
 
 DATETIME_FORMAT = '%Y/%m/%d-%H:%M:%S'
 DATETIME_INPUT_FORMATS = ['%Y/%m/%d-%H:%M:%S', ]

@@ -260,7 +260,7 @@ class PlaceViewSet(
     permission_classes = [IsManagerUser,]
 
     @action(detail=False, methods=['post'])
-    def set_place(self, request, *args, **kwargs):
+    def set_place(self, request: Request, *args, **kwargs):
         place_id = self.request.data.get('place_id')
         if not place_id:
             return Response({'message': 'place_id is required'}, status=HTTP_400_BAD_REQUEST)
@@ -290,9 +290,10 @@ class PlaceViewSet(
             value=place_id,
             httponly=True,
             max_age=one_year_in_seconds,
-            samesite='Strict',
+            samesite='None' if not settings.DEBUG else 'Lax',
             path='/api/',
-            domain=settings.DOMAIN,
+            secure=(not settings.DEBUG),
+
         )
 
         return response
@@ -324,15 +325,20 @@ class PlaceViewSet(
         response.delete_cookie(
             key='place_id',
             path='/api/',
-            domain=settings.DOMAIN,
-            samesite='Strict',
+            samesite='None' if not settings.DEBUG else 'Lax',
         )
         return response
 
     @action(detail=False, methods=['post'])
     def reset_all_places(self, request, *args, **kwargs):
         Place.reset_assigned()
-        return Response(data={'message': "مکان ها با موفقیت بازنشانی شدند"}, status=HTTP_200_OK)
+        response = Response(data={'message': "مکان ها با موفقیت بازنشانی شدند"}, status=HTTP_200_OK)
+        response.delete_cookie(
+            key='place_id',
+            path='/api/',
+            samesite='None' if not settings.DEBUG else 'Lax',
+        )
+        return response
 
 
 class GateViewSet(
