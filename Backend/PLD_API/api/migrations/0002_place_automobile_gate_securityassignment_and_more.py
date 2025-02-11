@@ -74,7 +74,7 @@ class Migration(migrations.Migration):
             name='Traffic',
             fields=[
                 ('id', models.BigAutoField(auto_created=True, primary_key=True, serialize=False, verbose_name='ID')),
-                ('image', models.ImageField(upload_to=api.models.auto_traffic_image)),
+                ('image', models.ImageField(upload_to=api.models.auto_traffic_image_path)),
                 ('time', models.DateTimeField()),
                 ('automobile', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='api.automobile')),
                 ('gate', models.ForeignKey(on_delete=django.db.models.deletion.CASCADE, to='api.gate')),

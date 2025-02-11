@@ -1,6 +1,7 @@
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch
+from django.dispatch import Signal
 
 from rest_framework import viewsets
 from rest_framework.mixins import (
@@ -27,7 +28,7 @@ from .serializers import *
 from .models import *
 from .permissions import IsManagerUser
 from .filters import *
-from .authenticators import *
+from .authentication import *
 class UserViewSet(DjoserUserViewSet):
 
     urls_to_exclude = ['set_username', 'reset_username']
@@ -257,7 +258,12 @@ class PlaceViewSet(
 
     queryset = Place.objects.prefetch_related('gates')
     serializer_class = PlaceSerializer
-    permission_classes = [IsManagerUser,]
+
+    def get_permissions(self):
+        if self.action == 'this_client_place':
+            return [IsAuthenticated()]
+        else:
+            return [IsManagerUser()]
 
     @action(detail=False, methods=['post'])
     def set_place(self, request: Request, *args, **kwargs):
@@ -340,6 +346,12 @@ class PlaceViewSet(
         )
         return response
 
+    @action(detail=False, methods=['get'])
+    def this_client_place(self, request, *args, **kwargs):
+        place_id = self.request.COOKIES.get('place_id')
+        return Response(data={'place_id': place_id}, status=HTTP_200_OK)
+
+
 
 class GateViewSet(
     CreateModelMixin,
@@ -367,14 +379,18 @@ class ListSecurityAssignmentView(ListAPIView):
     date_time_field = 'start_time'
 
 
+
+traffic_received = Signal()
+
 class TrafficView(ListCreateAPIView):
 
     serializer_class = TrafficSerializer
     queryset = Traffic.objects.select_related('gate__place', 'security_agent', 'automobile').all()
     pagination_class = PageNumberPagination
     filter_backends = [DjangoFilterBackend, JalaliDateTimeRangeFilter]
-    date_time_field = 'time'
-    filterset_class = TrafficFilterSet
+    date_time_field = 'time'  # specified for JalaliDateTimeRangeFilter
+    filterset_class = TrafficFilterSet  # custom filter set for DjangoBackendFilter
+    permission_classes = [IsAuthenticated, ]
 
     def get_authenticators(self):
         if self.request.method == 'POST':  # just AI model can create traffic records
@@ -382,17 +398,13 @@ class TrafficView(ListCreateAPIView):
         else:
             return super().get_authenticators()
 
-    def get_permissions(self):
-        if self.request.method == 'POST':
-            # as AIModelAuthentication doesn't create user it just authenticates token
-            return [AllowAny()]
-        else:
-            return [IsAuthenticated()]
-
     def create(self, request, *args, **kwargs):
 
         serializer = self.get_serializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        serializer.save()
-        return Response(serializer.data, status=HTTP_201_CREATED)
 
+        response = Response(data={'message': "ok"}, status=HTTP_202_ACCEPTED)
+
+        traffic_received.send(sender=self.__class__, serializer=serializer)
+
+        return response

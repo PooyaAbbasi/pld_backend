@@ -216,18 +216,22 @@ class Gate(models.Model):
     traffics = models.ManyToManyField(to=Automobile, through='api.Traffic', related_name='passed_gates', )
 
 
-def auto_traffic_image(instance, filename):
+def auto_traffic_image_path(instance:'Traffic', filename):
     """
-    :return: string represents path of storage for traffic images
-            in format : traffic_pics/{plate}-{time of traffic}-{type of traffic (enter or exit)}-{filename}
+    :return: path to save traffic image in media files.
     """
-    return f'traffic_pics/{instance.automobile.plate}-{instance.time}-{instance.gate.type}-{filename}'
+    return (f'traffic_pics/'
+            f'{instance.gate.name}/'
+            f'{instance.time.year}-'
+            f'{instance.time.month}-'
+            f'{instance.time.day}/'
+            f'{instance.time.hour}-{instance.time.minute}-{instance.time.second}__{instance.automobile_id}__{filename}')
 
 
 class Traffic(models.Model):
     automobile = models.ForeignKey(to=Automobile, on_delete=models.RESTRICT,)
     gate = models.ForeignKey(to=Gate, on_delete=models.RESTRICT,)
-    image = models.ImageField(upload_to=auto_traffic_image, )
+    image = models.ImageField(upload_to=auto_traffic_image_path, )
     time = models.DateTimeField(default=timezone.now)
     security_agent = models.ForeignKey(to=User, on_delete=models.RESTRICT,
                                        related_name='traffics', null=True, blank=True)

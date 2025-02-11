@@ -27,15 +27,17 @@ SECRET_KEY = 'django-insecure-aly!!7jg!6nwsh*ve5u^q5(h^*x2!a*2d@$pcx@pcupbo8w#c)
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost']
+ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.236.114']
 
-INTERNAL_IPS = ['127.0.0.1', 'localhost']
+INTERNAL_IPS = ['127.0.0.1', 'localhost', '192.168.236.114']
 
 DOMAIN = 'localhost'
 
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
+    'channels',
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -85,7 +87,7 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = 'PLD_API.wsgi.application'
-
+ASGI_APPLICATION = 'PLD_API.asgi.application'
 
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
@@ -213,9 +215,18 @@ CSRF_TRUSTED_ORIGINS = [
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
+    "http://0.0.0.0:8000",
 ]
 
 DATETIME_FORMAT = '%Y/%m/%d-%H:%M:%S'
 DATETIME_INPUT_FORMATS = ['%Y/%m/%d-%H:%M:%S', ]
 
 AI_MODEL_AUTH_TOKEN = "ai_auth_token"
+
+
+# Configure channel layers (using in-memory backend for development)
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",  # Replace with Redis in production
+    },
+}
