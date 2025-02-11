@@ -349,8 +349,17 @@ class PlaceViewSet(
     @action(detail=False, methods=['get'])
     def this_client_place(self, request, *args, **kwargs):
         place_id = self.request.COOKIES.get('place_id')
-        return Response(data={'place_id': place_id}, status=HTTP_200_OK)
 
+        if place_id is None:
+            return Response({'message': 'مکان برای این سیستم مشخص نشده'}, status=HTTP_400_BAD_REQUEST)
+
+        place = self.get_queryset().filter(id=place_id).first()
+
+        if place is not None:
+            serializer = self.get_serializer(place)
+            return Response(serializer.data, status=HTTP_200_OK)
+        else:
+            return Response(data={'message': 'مکان این سیستم صحیح نمی باشد'}, status=HTTP_404_NOT_FOUND)
 
 
 class GateViewSet(
