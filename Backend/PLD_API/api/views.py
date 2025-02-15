@@ -1,3 +1,5 @@
+from asyncio import mixins
+
 from django.shortcuts import render
 from django.shortcuts import get_object_or_404
 from django.db.models import Prefetch
@@ -18,7 +20,7 @@ from rest_framework.decorators import api_view, authentication_classes, permissi
 from rest_framework.status import *
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.filters import SearchFilter
-from rest_framework.generics import ListAPIView, ListCreateAPIView
+from rest_framework.generics import ListAPIView, ListCreateAPIView, GenericAPIView, mixins
 
 
 from djoser.views import UserViewSet as DjoserUserViewSet
@@ -391,7 +393,10 @@ class ListSecurityAssignmentView(ListAPIView):
 
 traffic_received = Signal()
 
-class TrafficView(ListCreateAPIView):
+
+class TrafficView(
+    ListCreateAPIView
+):
 
     serializer_class = TrafficSerializer
     queryset = Traffic.objects.select_related('gate__place', 'security_agent', 'automobile').all()
@@ -417,3 +422,23 @@ class TrafficView(ListCreateAPIView):
         traffic_received.send(sender=self.__class__, serializer=serializer)
 
         return response
+
+    def patch(self, request, *args, **kwargs):
+        """ Just for `permitted` field """
+
+        traffic = self.get_object()
+
+        permitted = request.data.get('permitted')
+
+        if permitted is None:
+            return Response({"detail": "'permitted' field is required."}, status=HTTP_400_BAD_REQUEST)
+
+        if permitted not in (True, False):
+            # validate given permitted field
+            return Response({"detail": "'permitted' must be a boolean."}, status=HTTP_400_BAD_REQUEST)
+
+        # update traffic object
+        traffic.permitted = permitted
+        traffic.save()
+        serializer = self.get_serializer(traffic)
+        return Response(serializer.data, status=HTTP_200_OK)
