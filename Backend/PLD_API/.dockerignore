@@ -20,3 +20,7 @@ media/
 
 # exclude defaults
 !media/defaults/
+
+
+### some sample codes
+/api/test_websocket.js
