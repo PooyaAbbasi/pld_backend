@@ -22,12 +22,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-aly!!7jg!6nwsh*ve5u^q5(h^*x2!a*2d@$pcx@pcupbo8w#c)'
+SECRET_KEY = os.environ.get('DJANGO_SECRET_KEY', 'django-insecure-aly!!7jg!6nwsh*ve5u^q5(h^*x2!a*2d@$pcx@pcupbo8w#c)')
+
+SECURE_SSL_CONFIGURED = bool(int(os.environ.get('DJANGO_SECURE_SSL_CONFIGURED', 0)))
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+DEBUG = bool(int(os.environ.get('DJANGO_DEBUG', 1)))
 
-ALLOWED_HOSTS = ['127.0.0.1', 'localhost', '192.168.236.114']
+ALLOWED_HOSTS = os.environ.get('DJANGO_ALLOWED_HOSTS', '127.0.0.1,localhost').split(',')
 
 INTERNAL_IPS = ['127.0.0.1', 'localhost', '192.168.236.114']
 
@@ -92,10 +94,29 @@ ASGI_APPLICATION = 'PLD_API.asgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.1/ref/settings/#databases
 
+
+CONN_MAX_AGE = os.environ.get('DJANGO_CONN_MAX_AGE', 0)
+CONN_MAX_AGE = None if CONN_MAX_AGE == "None" else int(CONN_MAX_AGE)
+
+# DATABASES = {
+#     'default': {
+#         'ENGINE': 'django.db.backends.sqlite3',
+#         'NAME': BASE_DIR / 'db.sqlite3',
+#     }
+# }
+
+# MySQL for production
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.mysql',
+        'NAME': os.environ.get('MYSQL_DATABASE', 'pld_database'),  # Database name
+        'USER': os.environ.get('MYSQL_USER', 'pld_user'),  # Database user
+        'PASSWORD': os.environ.get('MYSQL_PASSWORD', 'pld_password'),  # Database password
+        'HOST': os.environ.get('MYSQL_HOST', 'localhost'),  # The MySQL service name in Docker
+        'PORT': os.environ.get('MYSQL_PORT', '3306'),  # Default MySQL port
+        'OPTIONS': {
+            'charset': 'utf8mb4',  # Use UTF-8 with full Unicode support
+        },
     }
 }
 
@@ -135,7 +156,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/5.1/howto/static-files/
 
 STATIC_URL = 'static/'
-
+STATIC_ROOT = os.path.join(BASE_DIR, 'static')
 
 MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 MEDIA_URL = '/media/'
@@ -144,6 +165,56 @@ MEDIA_URL = '/media/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+LOG_DIR = os.path.join(BASE_DIR, "logs")
+if not os.path.exists(LOG_DIR):
+    os.makedirs(LOG_DIR)  # Ensure the logs directory exists
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} [{levelname}] {name}: {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "[{levelname}] {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "verbose",
+        },
+        "file_debug": {
+            "level": "DEBUG",
+            "class": "logging.FileHandler",
+            "filename": os.path.join(LOG_DIR, "debug.log"),
+            "formatter": "verbose",
+        },
+        "file_errors": {
+            "level": "WARNING",  # Logs warnings and above
+            "class": "logging.FileHandler",
+            "filename": os.path.join(LOG_DIR, "errors.log"),
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file_debug", "file_errors"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+        "django.request": {
+            "handlers": ["console", "file_errors"],
+            "level": "WARNING",
+            "propagate": False,
+        },
+    },
+}
 
 
 REST_FRAMEWORK = {
@@ -196,7 +267,8 @@ SIMPLE_JWT = {
     "TOKEN_OBTAIN_SERIALIZER": "api.serializers.TokenObtainPairSerializer",
 }
 
-CORS_ALLOW_ALL_ORIGINS = True
+# CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOWED_ORIGINS = ['http://127.0.0.1:8000'] + os.environ.get('DJANGO_CORS_ALLOWED_ORIGINS', 'http://localhost:8000').split(',')
 CORS_ALLOW_HEADERS = (
     *default_headers,
     'Content-Type',
@@ -205,18 +277,20 @@ CORS_ALLOW_HEADERS = (
     'x-ai-auth',
 )
 CORS_ALLOW_CREDENTIALS = True
-SESSION_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
-CSRF_COOKIE_SAMESITE = 'None' if not DEBUG else 'Lax'
-SESSION_COOKIE_SECURE = not DEBUG
-CSRF_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SAMESITE = 'Lax'
+SESSION_COOKIE_SECURE = SECURE_SSL_CONFIGURED
+CSRF_COOKIE_SECURE = SECURE_SSL_CONFIGURED
+SECURE_SSL_REDIRECT = SECURE_SSL_CONFIGURED
+
+SESSION_SAVE_EVERY_REQUEST = True
 
 CSRF_TRUSTED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
     "http://localhost:8000",
     "http://127.0.0.1:8000",
-    "http://0.0.0.0:8000",
-]
+] + os.environ.get('CSRF_ALLOWED_ORIGINS', "http://localhost").split(',')
 
 DATETIME_FORMAT = '%Y/%m/%d-%H:%M:%S'
 DATETIME_INPUT_FORMATS = ['%Y/%m/%d-%H:%M:%S', ]
@@ -227,6 +301,9 @@ AI_MODEL_AUTH_TOKEN = "ai_auth_token"
 # Configure channel layers (using in-memory backend for development)
 CHANNEL_LAYERS = {
     "default": {
-        "BACKEND": "channels.layers.InMemoryChannelLayer",  # Replace with Redis in production
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [(os.environ.get('REDIS_HOST', 'localhost'), 6379)],
+        },
     },
 }

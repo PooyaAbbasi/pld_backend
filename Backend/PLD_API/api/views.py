@@ -298,9 +298,9 @@ class PlaceViewSet(
             value=place_id,
             httponly=True,
             max_age=one_year_in_seconds,
-            samesite='None' if not settings.DEBUG else 'Lax',
+            samesite='Lax',
             path='/api/',
-            secure=(not settings.DEBUG),
+            secure=settings.SECURE_SSL_CONFIGURED,
 
         )
 
@@ -333,7 +333,7 @@ class PlaceViewSet(
         response.delete_cookie(
             key='place_id',
             path='/api/',
-            samesite='None' if not settings.DEBUG else 'Lax',
+            samesite='Lax',
         )
         return response
 
@@ -344,7 +344,7 @@ class PlaceViewSet(
         response.delete_cookie(
             key='place_id',
             path='/api/',
-            samesite='None' if not settings.DEBUG else 'Lax',
+            samesite='Lax',
         )
         return response
 

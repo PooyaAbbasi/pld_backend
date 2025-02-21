@@ -8,6 +8,10 @@ https://docs.djangoproject.com/en/5.1/howto/deployment/asgi/
 """
 
 import os
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PLD_API.settings')
+
+from django import setup
+setup()
 
 from django.core.asgi import get_asgi_application
 
@@ -17,8 +21,6 @@ from channels.auth import AuthMiddlewareStack
 from api.middlewares import JWTAuthMiddleware
 from api.routing import websocket_urlpatterns
 
-
-os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'PLD_API.settings')
 
 django_asgi_app = get_asgi_application()
 

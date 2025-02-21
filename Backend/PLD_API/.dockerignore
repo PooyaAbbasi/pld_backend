@@ -21,6 +21,19 @@ media/
 # exclude defaults
 !media/defaults/
 
+# MYSQL database volum data
+mysql_data/
+
+# logs folder
+logs/
+
 
 ### some sample codes
 /api/test_websocket.js
+
+__pycache__
+.git
+.idea
+*.log
+*.tmp
+*.bak

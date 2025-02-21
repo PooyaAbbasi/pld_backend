@@ -12,7 +12,6 @@ User = get_user_model()
 def get_user(user_id):
     try:
         user = User.objects.get(id=user_id)
-        print(f'{user = }')
         return user
     except User.DoesNotExist:
         return AnonymousUser()
