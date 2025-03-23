@@ -1,3 +1,7 @@
+""" script for initializing in startup of production
+    Used in Docker container.
+"""
+
 import os
 import django
 from django.contrib.auth import get_user_model

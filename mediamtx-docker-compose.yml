@@ -1,3 +1,5 @@
+### compose file for stream Mediamtx stream server.
+
 version: '3.8'
 
 services:
