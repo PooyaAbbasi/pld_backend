@@ -1,0 +1,61 @@
+##paths:
+##  stream1:
+##    source: publish
+##    publishUser: myuser
+##    publishPass: mypassword
+#
+## General configuration
+#server:
+#  logLevel: info
+#
+## Define paths for streaming
+#paths:
+#  all:  # Allows any stream
+#    source: publisher
+#
+
+##############################
+## API Configuration
+#api: yes
+#apiAddress: :9997
+#
+## RTSP Configuration
+#rtspAddress: :8554
+#protocols: [tcp, udp]
+#rtspsAddress: :8322
+#
+## RTMP Configuration
+#rtmpAddress: :1935
+#rtmpsAddress: :1936
+#
+## HLS Configuration
+#hlsAddress: :8888
+#hlsAlwaysRemux: yes
+#hlsSegmentCount: 3
+#hlsSegmentDuration: 1s
+#
+#authInternalUsers:
+#  - user: admin
+#    pass: admin123
+#    permissions:
+#    - action: publish
+#    - action: read
+#
+#paths:
+#  cam:
+#    publishUser: admin
+#    publishPass: admin123
+###################################
+
+
+authInternalUsers:
+  - user: admin
+    pass: admin123
+    permissions:
+    - action: publish
+    - action: read
+
+paths:
+  cam1:
+#    runOnInit: ffmpeg -f dshow -i video="@device_pnp_\\?\swd#vcamdevapi#3df6aeb7b7b29d8844b8c947d3b54f71858dc03749aa8b1841d17f62cb045fb0#{65e8773d-8f56-11d0-a3b9-00a0c9223196}\{fcebba03-9d13-4c13-9940-cc84fcd132d1}" -c:v libx264 -pix_fmt yuv420p -preset ultrafast -b:v 600k -f rtsp rtsp://admin:admin123@localhost:$RTSP_PORT/$MTX_PATH
+    runOnInitRestart: yes

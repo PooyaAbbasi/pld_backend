@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  mediamtx:
+    image: bluenviron/mediamtx:latest-ffmpeg
+    container_name: mediamtx
+    restart: unless-stopped
+    environment:
+      - MTX_RTSPTRANSPORTS=tcp
+      - MTX_WEBRTCADDITIONALHOSTS=172.30.1.215  # Replace with your actual IP if needed
+    ports:
+      - "8554:8554"   # RTSP
+      - "1935:1935"   # RTMP
+      - "8888:8888"   # WebRTC
+      - "8889:8889"   # API
+      - "8890:8890/udp"  # WebRTC UDP
+      - "8189:8189/udp"  # WebRTC UDP
+    volumes:
+      - .conf/mediamtx.yml:/mediamtx.yml  # Mount custom config file (optional)

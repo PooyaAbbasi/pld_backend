@@ -1,0 +1,94 @@
+version: '3'
+services:
+  redis:
+    image: redis:latest
+    restart: unless-stopped
+    networks:
+      - inside
+
+  db:
+    image: mysql:8.0
+    restart: unless-stopped
+#    environment:
+#      MYSQL_ROOT_PASSWORD: rootpassword  # Set a strong root password
+#      MYSQL_USER: myuser  # Create a user for your Django app
+#      MYSQL_PASSWORD: mypassword  # Set a password for the user
+#      MYSQL_DATABASE: mydatabase  # Set the name of the database
+    env_file:
+      - ./Backend/PLD_API/.env
+    volumes:
+      - ./Backend/PLD_API/mysql_data:/var/lib/mysql
+    networks:
+      - inside
+#    ports:
+#      - "3306:3306"  # Optional: Expose port for local testing (optional in production)
+
+
+  backend:
+    depends_on:
+      - db
+      - redis
+    image: pabbasi/pld_backend:latest
+    restart: unless-stopped
+    container_name: backend
+    command: >
+          sh -c "python manage.py migrate --noinput &&
+          python initialization.py &&
+          daphne -b 0.0.0.0 -p 8001 PLD_API.asgi:application &
+          gunicorn PLD_API.wsgi:application --workers 3 --bind 0.0.0.0:8000"
+
+#    ports:
+#      - "8000:8000"
+    env_file:
+      - ./Backend/PLD_API/.env
+
+    environment:
+      DJANGO_SETTINGS_MODULE: PLD_API.settings
+
+    volumes:
+#      - ./Backend/PLD_API/:/usr/src/app/
+#      - ./Backend/PLD_API/db.sqlite3:/usr/src/app/db.sqlite3
+      - ./Backend/PLD_API/media:/usr/src/app/media
+      - ./Backend/PLD_API/static:/usr/src/app/static
+
+    networks:
+      - inside
+
+  frontend:
+    image: frontend:latest
+    restart: unless-stopped
+    depends_on:
+      - backend
+    networks:
+      - inside
+    env_file:
+      - ./front_end/.env
+    volumes:
+      - ./front_end/frontend_nginx.conf:/etc/nginx/conf.d/default.conf:ro
+
+
+
+
+  nginx:
+    image: nginx:latest
+    container_name: nginx
+    restart: unless-stopped
+    depends_on:
+      - backend
+      - frontend
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./Backend/PLD_API/static:/app/static
+      - ./Backend/PLD_API/media:/app/media
+    networks:
+      - inside
+
+
+volumes:
+  mysql_data:
+
+networks:
+  inside:
+    driver: bridge
