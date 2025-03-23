@@ -1,142 +1,28 @@
-#
-#version: '3'
-#services:
-#  backend:
-#    image: pabbasi/pld_backend:dev-latest
-#
-#    restart: unless-stopped
-#    container_name: backend_api
-#    networks:
-#      - inside-network
-#
-#    command: >
-#      sh -c "python manage.py migrate --noinput &&
-#      python manage.py runserver 0.0.0.0:8000"
-#
-#    ports:
-#      - "8000:8000"
-#
-#    volumes:
-##      - ./Backend/PLD_API/:/usr/src/app/
-#      - ./Backend/PLD_API/db.sqlite3:/usr/src/app/db.sqlite3
-#      - ./Backend/PLD_API/media:/usr/src/app/media
-#
-#networks:
-#  inside-network:
-#
-#################################################
-
-
-#version: '3.8'
-#
-#services:
-#  mediamtx:
-#    image: bluenviron/mediamtx:latest-ffmpeg
-#    container_name: mediamtx
-#    restart: unless-stopped
-#    environment:
-#      - MTX_RTSPTRANSPORTS=tcp
-#      - MTX_WEBRTCADDITIONALHOSTS=192.168.244.209  # Replace with your actual IP if needed
-#    ports:
-#      - "8554:8554"   # RTSP
-#      - "1935:1935"   # RTMP
-#      - "8888:8888"   # WebRTC
-#      - "8889:8889"   # API
-#      - "8890:8890/udp"  # WebRTC UDP
-#      - "8189:8189/udp"  # WebRTC UDP
-#    volumes:
-#      - ./mediamtx.yml:/mediamtx.yml  # Mount custom config file (optional)
-###############################################################
-
-
-#services:
-#  mediamtx:
-#    image: bluenviron/mediamtx:latest-ffmpeg
-#    container_name: mediamtx
-#    network_mode: host  # Recommended
-#    volumes:
-#      - ./mediamtx.yml:/mediamtx.yml
-#    restart: unless-stopped
-
-
-
 
 version: '3'
 services:
-  redis:
-    image: redis:latest
-    restart: unless-stopped
-    networks:
-      - inside
-
-  db:
-    image: mysql:8.0
-    restart: unless-stopped
-#    environment:
-#      MYSQL_ROOT_PASSWORD: rootpassword  # Set a strong root password
-#      MYSQL_USER: myuser  # Create a user for your Django app
-#      MYSQL_PASSWORD: mypassword  # Set a password for the user
-#      MYSQL_DATABASE: mydatabase  # Set the name of the database
-    env_file:
-      - ./Backend/PLD_API/.env
-    volumes:
-      - ./Backend/PLD_API/mysql_data:/var/lib/mysql
-    networks:
-      - inside
-#    ports:
-#      - "3306:3306"  # Optional: Expose port for local testing (optional in production)
-
-
   backend:
-    depends_on:
-      - db
-      - redis
-    image: pabbasi/pld_backend:latest
+    image: pabbasi/pld_backend:dev-latest
+
     restart: unless-stopped
-    container_name: backend
+    container_name: backend_api
+    networks:
+      - inside-network
+
     command: >
-          sh -c "python manage.py migrate --noinput &&
-          python initialization.py &&
-          daphne -b 0.0.0.0 -p 8001 PLD_API.asgi:application & 
-          gunicorn PLD_API.wsgi:application --workers 3 --bind 0.0.0.0:8000"
+      sh -c "python manage.py migrate --noinput &&
+      python manage.py runserver 0.0.0.0:8000"
 
-#    ports:
-#      - "8000:8000"
-    env_file:
-      - ./Backend/PLD_API/.env
-
-    environment:
-      DJANGO_SETTINGS_MODULE: PLD_API.settings
+    ports:
+      - "8000:8000"
 
     volumes:
 #      - ./Backend/PLD_API/:/usr/src/app/
-#      - ./Backend/PLD_API/db.sqlite3:/usr/src/app/db.sqlite3
+      - ./Backend/PLD_API/db.sqlite3:/usr/src/app/db.sqlite3
       - ./Backend/PLD_API/media:/usr/src/app/media
-      - ./Backend/PLD_API/static:/usr/src/app/static
-
-    networks:
-      - inside
-
-
-  nginx:
-    image: nginx:latest
-    container_name: nginx
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "80:80"
-    volumes:
-      - ./nginx.conf:/etc/nginx/nginx.conf:ro
-      - ./Backend/PLD_API/static:/app/static
-      - ./Backend/PLD_API/media:/app/media
-    networks:
-      - inside
-
-
-volumes:
-  mysql_data:
 
 networks:
-  inside:
-    driver: bridge
+  inside-network:
+
+################################################
+
